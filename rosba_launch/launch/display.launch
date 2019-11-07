@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="config" default="lwr_ati_xtion_bhand"/>
+  <arg name="chain_model" default="$(arg config)"/>
+  <arg name="small_table" default="false"/>
+
+  <include file="$(find autharl_description)/launch/urdf.launch">
+    <arg name="config" value="$(arg config)"/>
+    <arg name="chain_model" value="$(arg chain_model)"/>
+    <arg name="small_table" value="$(arg small_table)"/>
+  </include>
+
+
+  <rosparam command="load" param="autharl_lwr_model" file="$(find autharl_description)/yaml/lwr.yml" />
+  <rosparam command="load" param="autharl_bhand_model" file="$(find autharl_description)/yaml/bhand.yml" />
+
+  <node name="rviz" pkg="rviz" type="rviz" respawn="false" args="-d $(find rosba_launch)/config/config.rviz" output="screen" />
+
+  <!-- Load MoveIt configuration -->
+  <include file="$(find lwr_ati_xtion_bhand_moveit_config)/launch/move_group.launch"/>
+</launch>
