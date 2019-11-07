@@ -50,7 +50,8 @@ bool REAL_ARM = false;
 bool REAL_HAND = false;
 std::string group_name = "lwr_ati_xtion_handle";
 Eigen::VectorXd HOME_ARM(7);
-Eigen::VectorXd HOME_HAND(4);
+Eigen::VectorXd HOME_HAND(8);
+std::shared_ptr<arl::controller::JointTrajectory> hand_joint_controller;
 
 void config()
 {
@@ -421,9 +422,15 @@ int main(int argc, char** argv)
   std::thread arm_viz_thread(&arl::viz::RosStatePublisher::run, arm_rviz);
   std::thread hand_viz_thread(&arl::viz::RosStatePublisher::run, hand_rviz);
 
-  ROS_INFO_STREAM(NODE_NAME << ": " << "main: Moving arm to home position.");
+  ROS_INFO_STREAM(NODE_NAME << ": " << "main: Moving arm/hand to home position.");
+  hand_joint_controller.reset(new arl::controller::JointTrajectory(hand_robot, arl::robot::Controller::Timing::DYNAMIC));
+  hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
+  hand_joint_controller->reference({3.14, 0, 0, 0, 0, 0, 0, 0}, 7);
+  std::thread hand_joint_controller_thread(&arl::controller::JointTrajectory::run, hand_joint_controller);
   arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
   arm_robot->setJointTrajectory(HOME_ARM, 8);
+  hand_joint_controller_thread.join();
+  hand_robot->setMode(arl::robot::Mode::STOPPED);
 
   ros::ServiceServer service = n.advertiseService("grasp", callback);
   ros::ServiceServer go_home_srv = n.advertiseService("go_home", goHome);
