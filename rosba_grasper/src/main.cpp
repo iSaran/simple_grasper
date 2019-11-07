@@ -41,16 +41,43 @@
 std::shared_ptr<arl::robot::Robot> arm_robot;
 std::shared_ptr<arl::robot::Robot> hand_robot;
 
-// Parameters
-const double DURATION = 3.5;
-const double PLANNING_TIME = 5.0;
-const bool REAL_ARM = false;
-const bool REAL_HAND = false;
 const std::string NODE_NAME = "rosba_grasper";
+
+// Parameters
+double DURATION = 3.5;
+double PLANNING_TIME = 5.0;
+bool REAL_ARM = false;
+bool REAL_HAND = false;
+std::string group_name = "lwr_ati_xtion_handle";
+Eigen::VectorXd HOME_ARM(7);
+Eigen::VectorXd HOME_HAND(4);
+
+void config()
+{
+  ros::NodeHandle n("~");
+  n.getParam("config/real_hw/arm", REAL_ARM);
+  n.getParam("config/real_hw/hand", REAL_HAND);
+  n.getParam("config/moveit/group_name", group_name);
+  n.getParam("config/moveit/planning_time", PLANNING_TIME);
+
+  XmlRpc::XmlRpcValue joint;
+  n.getParam("config/home/arm", joint);
+  for (unsigned int i = 0; i < 7; i++)
+  {
+    HOME_ARM(i) = joint[i];
+  }
+
+  ROS_INFO_STREAM("Params config for " << NODE_NAME << std::endl
+                   << "REAL_ARM: " << REAL_ARM << std::endl
+                   << "REAL_HAND: " << REAL_HAND << std::endl
+                   << "PLANNING_TIME: " << PLANNING_TIME << std::endl
+                   << "group_name: " << group_name << std::endl
+                   << "arm_home_config: " << HOME_ARM.transpose() << std::endl
+                   << "hand_home_config: " << HOME_HAND.transpose());
+}
 
 // Global variables
 bool already_home = false;
-std::string group_name = "lwr_ati_xtion_handle";
 
 geometry_msgs::Pose toROS(const Eigen::Affine3d& input)
 {
@@ -337,13 +364,9 @@ bool goHome(std_srvs::Trigger::Request  &req,
 
   // Move arm to home position
   ROS_INFO_STREAM(NODE_NAME << ": " << "goHome: Moving arm to the home position...");
-  Eigen::VectorXd joint(7);
-  // joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
-  joint << 1.0425608158111572, -0.17295242846012115, 0.41580450534820557, 1.1572487354278564, -0.04072001576423645, -1.6935195922851562, -1.5933283567428589;
-
   arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
   ros::Duration(1.0).sleep();
-  arm_robot->setJointTrajectory(joint, 8);
+  arm_robot->setJointTrajectory(HOME_ARM, 8);
 
   already_home = true;
 
@@ -357,6 +380,7 @@ int main(int argc, char** argv)
   // Initialize the ROS node
   ros::init(argc, argv, NODE_NAME);
   ros::NodeHandle n;
+  config();
 
   // Start an async spinner for MoveIt!
   ros::AsyncSpinner spinner(2);
@@ -398,11 +422,8 @@ int main(int argc, char** argv)
   std::thread hand_viz_thread(&arl::viz::RosStatePublisher::run, hand_rviz);
 
   ROS_INFO_STREAM(NODE_NAME << ": " << "main: Moving arm to home position.");
-  Eigen::VectorXd joint(7);
-  // joint << 1.3078799282743128, -0.36123428594319007, 0.07002260959000406, 1.2006818056150501, -0.0416365746355698, -1.51290026484531, -1.5423125534021;
-  joint << 1.0425608158111572, -0.17295242846012115, 0.41580450534820557, 1.1572487354278564, -0.04072001576423645, -1.6935195922851562, -1.5933283567428589;
   arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
-  arm_robot->setJointTrajectory(joint, 8);
+  arm_robot->setJointTrajectory(HOME_ARM, 8);
 
   ros::ServiceServer service = n.advertiseService("grasp", callback);
   ros::ServiceServer go_home_srv = n.advertiseService("go_home", goHome);
