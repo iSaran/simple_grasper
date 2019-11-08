@@ -8,6 +8,8 @@ Panels:
         - /TF1/Frames1
         - /Camera Point Cloud1/Autocompute Value Bounds1
         - /PointCloud21/Autocompute Value Bounds1
+        - /Target Frame1
+        - /Target Frame1/Status1
       Splitter Ratio: 0.725000024
     Tree Height: 1204
   - Class: rviz/Selection
@@ -437,6 +439,14 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /rosba_grasper_target_frame
+      Name: Target Frame
+      Namespaces:
+        {}
+      Queue Size: 100
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -462,25 +472,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.61768281
+      Distance: 3.1960876
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.98422569
-        Y: 0.44886443
+        X: 0.489922643
+        Y: 0.809053957
         Z: 0.766699135
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.439797103
+      Pitch: -0.0852021128
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.61766696
+      Yaw: 3.53266644
     Saved: ~
 Window Geometry:
   Displays:

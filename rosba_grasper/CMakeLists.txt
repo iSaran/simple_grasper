@@ -15,6 +15,7 @@ find_package(catkin REQUIRED
   rosba_msgs
   tf2
   tf2_ros
+  tf2_geometry_msgs
   lwr_robot
   bhand_robot
   moveit_ros_planning_interface

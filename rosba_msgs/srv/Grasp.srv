@@ -1,4 +1,4 @@
-geometry_msgs/PoseStamped grasp_pose
+geometry_msgs/PoseStamped target_pose
 float64 joint_config
 ---
 bool success
