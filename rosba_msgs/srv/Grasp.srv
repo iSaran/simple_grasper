@@ -1,4 +1,4 @@
 geometry_msgs/PoseStamped target_pose
-float64 joint_config
+float64[] hand_joint_config
 ---
 bool success

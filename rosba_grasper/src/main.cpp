@@ -76,6 +76,11 @@ void config()
   {
     HOME_ARM(i) = joint[i];
   }
+  n.getParam("config/home/hand", joint);
+  for (unsigned int i = 0; i < 8; i++)
+  {
+    HOME_HAND(i) = joint[i];
+  }
 
   ROS_INFO_STREAM("Params config for " << NODE_NAME << std::endl
                    << "REAL_ARM: " << REAL_ARM << std::endl
@@ -101,6 +106,31 @@ geometry_msgs::Pose toROS(const Eigen::Affine3d& input)
   result.orientation.z = q.z();
   result.orientation.w = q.w();
   return result;
+}
+
+bool setJointTrajectoryParallel(const Eigen::VectorXd& arm, const Eigen::VectorXd& hand)
+{
+  hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
+  hand_joint_controller->reference(hand.toArma(), 7);
+  std::thread hand_joint_controller_thread(&arl::controller::JointTrajectory::run, hand_joint_controller);
+  arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+  arm_robot->setJointTrajectory(arm, 8);
+  hand_joint_controller_thread.join();
+  hand_robot->setMode(arl::robot::Mode::STOPPED);
+}
+
+bool setJointTrajectory(const arl::primitive::JointTrajectory& arm, const Eigen::VectorXd& hand)
+{
+  // Create joint trajectory controller for executing plans
+  arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+  arl::controller::JointTrajectory trajectory_controller(arm_robot);
+  trajectory_controller.reference(arm);
+  trajectory_controller.run();
+
+  hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
+  hand_joint_controller->reference(hand.toArma(), 7);
+  hand_joint_controller->run();
+  hand_robot->setMode(arl::robot::Mode::STOPPED);
 }
 
 Eigen::Affine3d toEigen(const geometry_msgs::Pose& input)
@@ -141,11 +171,12 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   arl::primitive::JointTrajectory trajectory(plan.trajectory_.joint_trajectory);
   trajectory.scale(DURATION / trajectory.duration());
 
-  // Create joint trajectory controlle for executing plans
-  arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
-  arl::controller::JointTrajectory trajectory_controller(arm_robot);
-  trajectory_controller.reference(trajectory);
-  trajectory_controller.run();
+  Eigen::VectorXd joint(8);
+  for (unsigned int i = 0; i < 8; i++)
+  {
+      joint(i) = req.hand_joint_config[i];
+  }
+  setJointTrajectory(trajectory, joint);
 
   res.success = true;
   ROS_INFO("Grasper finished.");
@@ -161,15 +192,11 @@ bool goHome(std_srvs::Trigger::Request  &req,
     res.success = true;
     return true;
   }
-
   // Move arm to home position
-  ROS_INFO_STREAM(NODE_NAME << ": " << "goHome: Moving arm to the home position...");
-  arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+  ROS_INFO_STREAM(NODE_NAME << ": " << "main: Moving arm/hand to home position.");
+  setJointTrajectoryParallel(HOME_ARM, HOME_HAND);
   ros::Duration(1.0).sleep();
-  arm_robot->setJointTrajectory(HOME_ARM, 8);
-
   already_home = true;
-
   res.success = true;
   ROS_INFO_STREAM(NODE_NAME << ": " << "goHome: Finished.");
   return true;
@@ -215,23 +242,18 @@ int main(int argc, char** argv)
   }
 
   std::shared_ptr<arl::robot::Sensor> sensor;
+  // Dynamic timing has problems with visualization.
+  //hand_joint_controller.reset(new arl::controller::JointTrajectory(hand_robot, arl::robot::Controller::Timing::DYNAMIC));
+  hand_joint_controller.reset(new arl::controller::JointTrajectory(hand_robot));
 
-  // Create a visualizater for see the result in rviz
-  auto arm_rviz = std::make_shared<arl::viz::RosStatePublisher>(arm_robot, "/autharl_joint_state", 50, "world", "rosba_arm_viz");
-  auto hand_rviz = std::make_shared<arl::viz::RosStatePublisher>(hand_robot, "/autharl_joint_state_tool", 50, "world", "rosba_hand_viz");
+  // Create a visualizer for see the result in rviz
+  auto arm_rviz = std::make_shared<arl::viz::RosStatePublisher>(arm_robot, "/autharl_joint_state", 50, "world");
+  auto hand_rviz = std::make_shared<arl::viz::RosStatePublisher>(hand_robot, "/autharl_joint_state_tool", 50, "world");
 
   std::thread arm_viz_thread(&arl::viz::RosStatePublisher::run, arm_rviz);
   std::thread hand_viz_thread(&arl::viz::RosStatePublisher::run, hand_rviz);
 
-  ROS_INFO_STREAM(NODE_NAME << ": " << "main: Moving arm/hand to home position.");
-  hand_joint_controller.reset(new arl::controller::JointTrajectory(hand_robot, arl::robot::Controller::Timing::DYNAMIC));
-  hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
-  hand_joint_controller->reference({3.14, 0, 0, 0, 0, 0, 0, 0}, 7);
-  std::thread hand_joint_controller_thread(&arl::controller::JointTrajectory::run, hand_joint_controller);
-  arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
-  arm_robot->setJointTrajectory(HOME_ARM, 8);
-  hand_joint_controller_thread.join();
-  hand_robot->setMode(arl::robot::Mode::STOPPED);
+  setJointTrajectoryParallel(HOME_ARM, HOME_HAND);
 
   ros::ServiceServer service = n.advertiseService("grasp", callback);
   ros::ServiceServer go_home_srv = n.advertiseService("go_home", goHome);
