@@ -65,6 +65,10 @@ void config()
   n.getParam("config/real_hw/hand", REAL_HAND);
   n.getParam("config/moveit/group_name", group_name);
   n.getParam("config/moveit/planning_time", PLANNING_TIME);
+  n.getParam("config/moveit/duration", DURATION);
+
+  n.getParam("config/rviz/frame", RVIZ_FRAME);
+  n.getParam("config/rviz/topic", RVIZ_TOPIC);
 
   XmlRpc::XmlRpcValue joint;
   n.getParam("config/home/arm", joint);
@@ -77,6 +81,9 @@ void config()
                    << "REAL_ARM: " << REAL_ARM << std::endl
                    << "REAL_HAND: " << REAL_HAND << std::endl
                    << "PLANNING_TIME: " << PLANNING_TIME << std::endl
+                   << "DURATION: " << DURATION << std::endl
+                   << "RVIZ_FRAME: " << RVIZ_FRAME << std::endl
+                   << "RVIZ_TOPIC: " << RVIZ_TOPIC << std::endl
                    << "group_name: " << group_name << std::endl
                    << "arm_home_config: " << HOME_ARM.transpose() << std::endl
                    << "hand_home_config: " << HOME_HAND.transpose());
@@ -121,6 +128,24 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   std::cout << "Pose:" << std::endl << target_pose.pose << std::endl;
   rviz->visualizeFrame(toEigen(target_pose.pose));
 
+  // Create group_name
+  moveit::planning_interface::MoveGroupInterface group(group_name);
+  moveit::planning_interface::MoveGroupInterface::Plan plan;
+  moveit_msgs::RobotState start_state;
+  group.setPlanningTime(PLANNING_TIME);
+  group.setNumPlanningAttempts(30);
+  group.setGoalTolerance(0.005);
+  group.setPoseTarget(target_pose);
+  bool success = (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+
+  arl::primitive::JointTrajectory trajectory(plan.trajectory_.joint_trajectory);
+  trajectory.scale(DURATION / trajectory.duration());
+
+  // Create joint trajectory controlle for executing plans
+  arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+  arl::controller::JointTrajectory trajectory_controller(arm_robot);
+  trajectory_controller.reference(trajectory);
+  trajectory_controller.run();
 
   res.success = true;
   ROS_INFO("Grasper finished.");

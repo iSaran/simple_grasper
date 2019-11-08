@@ -9,6 +9,7 @@ real_hw:
 moveit:
   group_name: "lwr_ati_xtion_bhand"
   planning_time: 5.0
+  duration: 10.0
 
 rviz:
   frame: "world"
