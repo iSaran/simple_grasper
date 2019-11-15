@@ -223,15 +223,6 @@ int main(int argc, char** argv)
   // auto hand_model  = std::make_shared<arl::bhand::Model>("/robot_description");
 
   // Create a simulated robot
-  if (REAL_ARM)
-  {
-    arm_robot.reset(new arl::lwr::Robot(arm_model));
-  }
-  else
-  {
-    arm_robot.reset(new arl::lwr::RobotSim(arm_model, 1e-3));
-  }
-
   if (REAL_HAND)
   {
     hand_robot.reset(new arl::bhand::Robot(hand_model));
@@ -239,6 +230,15 @@ int main(int argc, char** argv)
   else
   {
     hand_robot.reset(new arl::robot::RobotSim(hand_model, 1e-3));
+  }
+
+  if (REAL_ARM)
+  {
+    arm_robot.reset(new arl::lwr::Robot(arm_model));
+  }
+  else
+  {
+    arm_robot.reset(new arl::lwr::RobotSim(arm_model, 1e-3));
   }
 
   std::shared_ptr<arl::robot::Sensor> sensor;

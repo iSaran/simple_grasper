@@ -3,8 +3,8 @@ home:
   hand: [3.14, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 real_hw:
-  arm: false
-  hand: false
+  arm: True
+  hand: True
 
 moveit:
   group_name: "lwr_ati_xtion_bhand"
