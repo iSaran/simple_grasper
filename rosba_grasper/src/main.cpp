@@ -40,9 +40,9 @@
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 
 // Global variables
-std::shared_ptr<arl::robot::Robot> arm_robot;
-std::shared_ptr<arl::robot::Robot> hand_robot;
+std::shared_ptr<arl::robot::Robot> arm_robot, hand_robot, arm_viz_robot, hand_viz_robot;
 std::shared_ptr<arl::viz::RVisualizer> rviz;
+std::shared_ptr<arl::viz::RosStatePublisher> arm_rviz, hand_rviz;
 bool already_home = false;
 std::shared_ptr<arl::controller::JointTrajectory> hand_joint_controller;
 const std::string NODE_NAME = "rosba_grasper";
@@ -54,7 +54,7 @@ bool REAL_ARM = false;
 bool REAL_HAND = false;
 std::string group_name = "lwr_ati_xtion_bhand";
 Eigen::VectorXd HOME_ARM(7);
-Eigen::VectorXd HOME_HAND(8);
+Eigen::VectorXd HOME_HAND(8), PREGRASP_HAND(8);
 std::string RVIZ_FRAME = "world";
 std::string RVIZ_TOPIC = "/rosba_grasper_target_frame";
 
@@ -82,6 +82,13 @@ void config()
     HOME_HAND(i) = joint[i];
   }
 
+  n.getParam("config/home/pregrasp", joint);
+  for (unsigned int i = 0; i < 8; i++)
+  {
+    PREGRASP_HAND(i) = joint[i];
+  }
+
+
   ROS_INFO_STREAM("Params config for " << NODE_NAME << std::endl
                    << "REAL_ARM: " << REAL_ARM << std::endl
                    << "REAL_HAND: " << REAL_HAND << std::endl
@@ -91,7 +98,8 @@ void config()
                    << "RVIZ_TOPIC: " << RVIZ_TOPIC << std::endl
                    << "group_name: " << group_name << std::endl
                    << "arm_home_config: " << HOME_ARM.transpose() << std::endl
-                   << "hand_home_config: " << HOME_HAND.transpose());
+                   << "hand_home_config: " << HOME_HAND.transpose() << std::endl
+                   << "hand_pregrasp_config: " << PREGRASP_HAND.transpose());
 }
 
 geometry_msgs::Pose toROS(const Eigen::Affine3d& input)
@@ -114,22 +122,57 @@ bool setJointTrajectoryParallel(const Eigen::VectorXd& arm, const Eigen::VectorX
   hand_joint_controller->reference(hand.toArma(), 7);
   std::thread hand_joint_controller_thread(&arl::controller::JointTrajectory::run, hand_joint_controller);
   arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
-  arm_robot->setJointTrajectory(arm, 8);
+  arm_robot->setJointTrajectory(arm, 10);
   hand_joint_controller_thread.join();
   hand_robot->setMode(arl::robot::Mode::STOPPED);
 }
 
-bool setJointTrajectory(const arl::primitive::JointTrajectory& arm, const Eigen::VectorXd& hand)
+bool setJointTrajectory(const arl::primitive::JointTrajectory& arm, const Eigen::VectorXd& hand, bool viz_first=false)
 {
-  // Create joint trajectory controller for executing plans
+  if (viz_first)
+  {
+    // Create joint trajectory controller for executing plans
+    arm_rviz->setRobotPointer(arm_viz_robot);
+    hand_rviz->setRobotPointer(hand_viz_robot);
+
+    ros::Duration(1.0).sleep();
+
+    // arm_viz_robot->setJointPosition(arm_robot->getJointPosition());
+    // hand_viz_robot->setJointPosition(hand_robot->getJointPosition());
+
+    arm_viz_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+    arl::controller::JointTrajectory trajectory_controller(arm_viz_robot);
+    trajectory_controller.reference(arm);
+    trajectory_controller.run();
+
+    hand_viz_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
+    arl::controller::JointTrajectory hand_joint_controller_(hand_viz_robot);
+    hand_joint_controller_.reference(hand.toArma(), 7);
+    hand_joint_controller_.run();
+    hand_viz_robot->setMode(arl::robot::Mode::STOPPED);
+
+    int x;
+    std::cout << "Execute? (0: No, 1: Yes): ";
+    std::cin >> x; // Get user input from the keyboard
+
+    arm_rviz->setRobotPointer(arm_robot);
+    hand_rviz->setRobotPointer(hand_robot);
+
+    if (x == 0)
+    {
+      return true;
+    }
+  }
+
   arm_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
   arl::controller::JointTrajectory trajectory_controller(arm_robot);
   trajectory_controller.reference(arm);
   trajectory_controller.run();
 
   hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
-  hand_joint_controller->reference(hand.toArma(), 7);
-  hand_joint_controller->run();
+  arl::controller::JointTrajectory hand_joint_controller_(hand_robot);
+  hand_joint_controller_.reference(hand.toArma(), 7);
+  hand_joint_controller_.run();
   hand_robot->setMode(arl::robot::Mode::STOPPED);
 }
 
@@ -148,6 +191,14 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   already_home = false;
   Eigen::Vector3d arm_init_pos = arm_robot->getTaskPosition();
 
+
+  hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
+  arl::controller::JointTrajectory hand_joint_controller_(hand_robot);
+  hand_joint_controller_.reference(PREGRASP_HAND.toArma(), 7);
+  hand_joint_controller_.run();
+  hand_robot->setMode(arl::robot::Mode::STOPPED);
+  ros::Duration(1.0).sleep();
+
   // Transform pose to world frame
   tf2_ros::Buffer tfBuffer;
   tf2_ros::TransformListener tfListener(tfBuffer);
@@ -163,8 +214,8 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   moveit::planning_interface::MoveGroupInterface::Plan plan;
   moveit_msgs::RobotState start_state;
   group.setPlanningTime(PLANNING_TIME);
-  group.setNumPlanningAttempts(30);
-  group.setGoalTolerance(0.005);
+  group.setNumPlanningAttempts(1000);
+  group.setGoalTolerance(0.01);
   group.setPoseTarget(target_pose);
   bool success = (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
 
@@ -176,7 +227,7 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   {
       joint(i) = req.hand_joint_config[i];
   }
-  setJointTrajectory(trajectory, joint);
+  setJointTrajectory(trajectory, joint, true);
 
   res.success = true;
   ROS_INFO("Grasper finished.");
@@ -201,6 +252,25 @@ bool goHome(std_srvs::Trigger::Request  &req,
   ROS_INFO_STREAM(NODE_NAME << ": " << "goHome: Finished.");
   return true;
 }
+
+
+
+bool goPregrasp(std_srvs::Trigger::Request  &req,
+                std_srvs::Trigger::Response &res)
+{
+  ROS_INFO_STREAM(NODE_NAME << ": " << "main: Moving hand to pregrasp position.");
+  already_home = false;
+  hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
+  arl::controller::JointTrajectory hand_joint_controller_(hand_robot);
+  hand_joint_controller_.reference(PREGRASP_HAND.toArma(), 7);
+  hand_joint_controller_.run();
+  hand_robot->setMode(arl::robot::Mode::STOPPED);
+  ros::Duration(1.0).sleep();
+  ROS_INFO_STREAM(NODE_NAME << ": " << "goPregrasp: Finished.");
+  res.success = true;
+  return true;
+}
+
 
 int main(int argc, char** argv)
 {
@@ -229,7 +299,7 @@ int main(int argc, char** argv)
   }
   else
   {
-    hand_robot.reset(new arl::robot::RobotSim(hand_model, 1e-3));
+    hand_robot.reset(new arl::robot::RobotSim(hand_model, 1e-3, false));
   }
 
   if (REAL_ARM)
@@ -240,6 +310,8 @@ int main(int argc, char** argv)
   {
     arm_robot.reset(new arl::lwr::RobotSim(arm_model, 1e-3));
   }
+  arm_viz_robot.reset(new arl::robot::RobotSim(arm_model, 1e-3));
+  hand_viz_robot.reset(new arl::robot::RobotSim(hand_model, 1e-3, false));
 
   std::shared_ptr<arl::robot::Sensor> sensor;
   // Dynamic timing has problems with visualization.
@@ -247,8 +319,8 @@ int main(int argc, char** argv)
   hand_joint_controller.reset(new arl::controller::JointTrajectory(hand_robot));
 
   // Create a visualizer for see the result in rviz
-  auto arm_rviz = std::make_shared<arl::viz::RosStatePublisher>(arm_robot, "/autharl_joint_state", 50, "world");
-  auto hand_rviz = std::make_shared<arl::viz::RosStatePublisher>(hand_robot, "/autharl_joint_state_tool", 50, "world");
+  arm_rviz.reset(new arl::viz::RosStatePublisher(arm_robot, "/autharl_joint_state", 50, "world"));
+  hand_rviz.reset(new arl::viz::RosStatePublisher(hand_robot, "/autharl_joint_state_tool", 50, "world"));
 
   std::thread arm_viz_thread(&arl::viz::RosStatePublisher::run, arm_rviz);
   std::thread hand_viz_thread(&arl::viz::RosStatePublisher::run, hand_rviz);
@@ -257,6 +329,7 @@ int main(int argc, char** argv)
 
   ros::ServiceServer service = n.advertiseService("grasp", callback);
   ros::ServiceServer go_home_srv = n.advertiseService("go_home", goHome);
+  ros::ServiceServer go_pregrasp_srv = n.advertiseService("go_pregrasp", goPregrasp);
   ROS_INFO_STREAM(NODE_NAME << ": " << "main: Ready to grasp objects.");
 
   arm_viz_thread.join();
