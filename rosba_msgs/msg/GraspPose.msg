@@ -1,0 +1,2 @@
+geometry_msgs/PoseStamped target_pose
+float64[] hand_joint_config
