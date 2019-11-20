@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
-  <arg name="config" default="lwr_ati_xtion_bhand"/>
+  <arg name="config" default="lwr_ati_bhand"/>
   <arg name="chain_model" default="$(arg config)"/>
   <arg name="small_table" default="false"/>
 
@@ -17,5 +17,5 @@
   <node name="rviz" pkg="rviz" type="rviz" respawn="false" args="-d $(find rosba_launch)/config/config.rviz" output="screen" />
 
   <!-- Load MoveIt configuration -->
-  <include file="$(find lwr_ati_xtion_bhand_moveit_config)/launch/move_group.launch"/>
+  <include file="$(find lwr_ati_bhand_moveit_config)/launch/move_group.launch"/>
 </launch>

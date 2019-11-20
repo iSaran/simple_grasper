@@ -9,7 +9,8 @@ real_hw:
   hand: True
 
 moveit:
-  group_name: "lwr_ati_xtion_bhand"
+  # group_name: "lwr_ati_xtion_bhand"
+  group_name: "lwr_ati_bhand_palm"
   planning_time: 100.0
   duration: 10.0
 
