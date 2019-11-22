@@ -176,13 +176,19 @@ bool setJointTrajectory(const arl::primitive::JointTrajectory& arm, const Eigen:
   hand_robot->setMode(arl::robot::Mode::STOPPED);
 }
 
-bool setJointTrajectories(const std::vector<arl::primitive::JointTrajectory*>& arm, const std::vector<Eigen::VectorXd>& hand, bool viz_first=false)
+bool setJointTrajectories(const std::vector<arl::primitive::JointTrajectory*>& arm,
+                          const std::vector<Eigen::VectorXd>& hand_joints,
+                          bool viz_first=false)
 {
+  std::cout << "hand size: " << hand_joints.size() << std::endl;
   if (viz_first)
   {
     // Create joint trajectory controller for executing plans
     arm_rviz->setRobotPointer(arm_viz_robot);
     hand_rviz->setRobotPointer(hand_viz_robot);
+
+    hand_viz_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
+    // hand_viz_robot->setJointPosition(hand_robot->getJointPosition());
 
     ros::Duration(1.0).sleep();
 
@@ -195,7 +201,9 @@ bool setJointTrajectories(const std::vector<arl::primitive::JointTrajectory*>& a
 
       hand_viz_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
       arl::controller::JointTrajectory hand_joint_controller_(hand_viz_robot);
-      hand_joint_controller_.reference(hand.at(i).toArma(), 7);
+      std::cout << "Setting reference to hand: " << hand_joints.at(i).transpose() << std::endl;
+      std::cout << "Setting reference to hand arma: " << hand_joints.at(i).toArma() << std::endl;
+      hand_joint_controller_.reference(hand_joints.at(i).toArma(), 7);
       hand_joint_controller_.run();
       hand_viz_robot->setMode(arl::robot::Mode::STOPPED);
     }
@@ -225,10 +233,20 @@ bool setJointTrajectories(const std::vector<arl::primitive::JointTrajectory*>& a
 
     hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
     arl::controller::JointTrajectory hand_joint_controller_(hand_robot);
-    hand_joint_controller_.reference(hand.at(i).toArma(), 7);
+    hand_joint_controller_.reference(hand_joints.at(i).toArma(), 7);
     hand_joint_controller_.run();
     hand_robot->setMode(arl::robot::Mode::STOPPED);
   }
+}
+
+void printVector(const std::vector<double>& vec)
+{
+  std::cout << vec.at(0);
+  for (unsigned int i = 0; i < vec.size(); i++)
+  {
+    std::cout << ", " << vec.at(i);
+  }
+  std::cout << std::endl;
 }
 
 Eigen::Affine3d toEigen(const geometry_msgs::Pose& input)
@@ -246,7 +264,11 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   already_home = false;
   Eigen::Vector3d arm_init_pos = arm_robot->getTaskPosition();
 
-
+  for (unsigned int i = 0; i < req.grasp.size(); i++)
+  {
+    std::cout << "Hand joint config for i:" << i << std::endl;
+    printVector(req.grasp.at(i).hand_joint_config);
+  }
   // Got to pregrasp config
   hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
   arl::controller::JointTrajectory hand_joint_controller_(hand_robot);
@@ -263,7 +285,7 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   group.setNumPlanningAttempts(1000);
   group.setGoalTolerance(0.01);
   std::vector<arl::primitive::JointTrajectory*> trajectory(req.grasp.size());
-  std::vector<Eigen::VectorXd> hand_configs(req.grasp.size());
+  std::vector<Eigen::VectorXd> hand_configs;
 
   // Transform pose to world frame
   tf2_ros::Buffer tfBuffer;
@@ -299,10 +321,14 @@ bool callback(rosba_msgs::Grasp::Request  &req,
     trajectory.at(i)->scale(DURATION / trajectory.at(i)->duration());
 
     Eigen::VectorXd joint(8);
+    joint.setZero();
     for (unsigned int j = 0; j < 8; j++)
     {
-        joint(i) = req.grasp[i].hand_joint_config[i];
+      // std::cout << "i, j" << i << ", " << j << ": "<<  req.grasp[i].hand_joint_config[j] << std::endl;
+
+        joint(j) = req.grasp[i].hand_joint_config[j];
     }
+    std::cout << "joints for hand pushing back:" << joint.transpose() << std::endl;
     hand_configs.push_back(joint);
   }
 
