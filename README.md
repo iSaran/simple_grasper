@@ -21,6 +21,8 @@ Then `catkin_make`.
 
 ## Run
 
+### Rviz and robot services
+
 Run the following launch files/nodes in different terminals:
 
 Before anything launch RViz and URDF:
@@ -35,10 +37,30 @@ Run grasper which provides `home` and `grasp` services:
 roslaunch rosba_grasper run.launch
 ```
 
-Camera:
+### Camera
+
+If you have the camera mounted on the robot run:
 
 ```bash
 roslaunch openni2_launch openni2.launch camera:=asus_xtion publish_tf:=false
+```
+
+If the camera is not on the robot:
+
+```bash
+roslaunch openni2_launch openni2.launch camera:=asus_xtion
+```
+
+And then put the april tags on the table and calibrate:
+
+```bash
+rosrun camera_robot_calibration calibrate
+```
+
+Then publish the calibration transformation to TF:
+
+```bash
+rosrun camera_robot_calibration tf_broadcaster
 ```
 
 If you want to test if BHand works run:
