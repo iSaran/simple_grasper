@@ -131,6 +131,7 @@ bool setJointTrajectory(const arl::primitive::JointTrajectory& arm, const Eigen:
 {
   if (viz_first)
   {
+    ROS_INFO_STREAM("Executing plan in simulation. Check RViz.");
     // Create joint trajectory controller for executing plans
     arm_rviz->setRobotPointer(arm_viz_robot);
     hand_rviz->setRobotPointer(hand_viz_robot);
@@ -152,7 +153,7 @@ bool setJointTrajectory(const arl::primitive::JointTrajectory& arm, const Eigen:
     hand_viz_robot->setMode(arl::robot::Mode::STOPPED);
 
     int x;
-    std::cout << "Execute? (0: No, 1: Yes): ";
+    std::cout << "Execute in real robot? (0: No, 1: Yes): ";
     std::cin >> x; // Get user input from the keyboard
 
     arm_rviz->setRobotPointer(arm_robot);
@@ -264,11 +265,12 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   already_home = false;
   Eigen::Vector3d arm_init_pos = arm_robot->getTaskPosition();
 
-  for (unsigned int i = 0; i < req.grasp.size(); i++)
-  {
-    std::cout << "Hand joint config for i:" << i << std::endl;
-    printVector(req.grasp.at(i).hand_joint_config);
-  }
+  // for (unsigned int i = 0; i < req.grasp.size(); i++)
+  // {
+  //   std::cout << "Hand joint config for i:" << i << std::endl;
+  //   printVector(req.grasp.at(i).hand_joint_config);
+  // }
+
   // Got to pregrasp config
   hand_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
   arl::controller::JointTrajectory hand_joint_controller_(hand_robot);
@@ -284,59 +286,75 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   group.setPlanningTime(PLANNING_TIME);
   group.setNumPlanningAttempts(1000);
   group.setGoalTolerance(0.01);
-  std::vector<arl::primitive::JointTrajectory*> trajectory(req.grasp.size());
-  std::vector<Eigen::VectorXd> hand_configs;
 
   // Transform pose to world frame
   tf2_ros::Buffer tfBuffer;
   tf2_ros::TransformListener tfListener(tfBuffer);
   geometry_msgs::TransformStamped transformStamped;
-    geometry_msgs::PoseStamped target_pose;
-  for (unsigned int i = 0; i < req.grasp.size(); i++)
+  geometry_msgs::PoseStamped target_pose;
+
+  unsigned int grasp_index = 0, pose_index = 0;
+
+  for (auto grasp : req.grasp)
   {
-    transformStamped = tfBuffer.lookupTransform("world", req.grasp[i].target_pose.header.frame_id, ros::Time(0), ros::Duration(10));
-    tf2::doTransform(req.grasp[i].target_pose, target_pose, transformStamped);
-    // std::cout << "Pose:" << std::endl << target_pose.pose << std::endl;
-    rviz->visualizeFrame(toEigen(target_pose.pose));
+    pose_index = 0;
+    std::vector<arl::primitive::JointTrajectory*> trajectory(grasp.pose.size());
+    std::vector<Eigen::VectorXd> hand_configs;
+    bool found_plan_for_every_pose = true;
 
-    if (i > 0)
+    for (auto pose : grasp.pose)
     {
-      start_state.joint_state.name =  plan.trajectory_.joint_trajectory.joint_names;
-      start_state.joint_state.position = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size() - 1].positions;
-      group.setStartState(start_state);
+      transformStamped = tfBuffer.lookupTransform("world", pose.target_pose.header.frame_id, ros::Time(0), ros::Duration(10));
+      tf2::doTransform(pose.target_pose, target_pose, transformStamped);
+      rviz->visualizeFrame(toEigen(target_pose.pose));
+
+      // Set the initial state of the robot as the final state in the previous plan
+      if (pose_index > 0)
+      {
+        start_state.joint_state.name =  plan.trajectory_.joint_trajectory.joint_names;
+        start_state.joint_state.position = plan.trajectory_.joint_trajectory.points[plan.trajectory_.joint_trajectory.points.size() - 1].positions;
+        group.setStartState(start_state);
+      }
+
+      group.setPoseTarget(target_pose);
+      bool success = (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
+
+      if (!success)
+      {
+        ROS_WARN_STREAM("Failed to plan for the pose " << pose_index << " of grasp n. " << grasp_index << ". I 'll continue to plan for the next grasp.");
+        found_plan_for_every_pose = false;
+        break;
+      }
+
+      // Save the solution of the plan
+      trajectory.at(pose_index) = new arl::primitive::JointTrajectory(plan.trajectory_.joint_trajectory);
+      trajectory.at(pose_index)->scale(DURATION / trajectory.at(pose_index)->duration());
+
+      Eigen::VectorXd joint(8);
+      joint.setZero();
+      for (unsigned int j = 0; j < 8; j++)
+      {
+          joint(j) = pose.hand_joint_config[j];
+      }
+      hand_configs.push_back(joint);
+      pose_index++;
     }
 
-    group.setPoseTarget(target_pose);
-    bool success = (group.plan(plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-
-    if (!success)
+    if (found_plan_for_every_pose)
     {
-      ROS_ERROR_STREAM("Failed to plan pose n." << i);
-      res.success = false;
-      return false;
+      // Execute them
+      ROS_INFO_STREAM("Found plan for grasp n. " << grasp_index);
+      setJointTrajectories(trajectory, hand_configs, true);
+      res.success = true;
+      ROS_INFO("Grasper finished.");
+      return true;
     }
-
-    // arl::primitive::JointTrajectory trajectory(plan.trajectory_.joint_trajectory);
-    trajectory.at(i) = new arl::primitive::JointTrajectory(plan.trajectory_.joint_trajectory);
-    trajectory.at(i)->scale(DURATION / trajectory.at(i)->duration());
-
-    Eigen::VectorXd joint(8);
-    joint.setZero();
-    for (unsigned int j = 0; j < 8; j++)
-    {
-      // std::cout << "i, j" << i << ", " << j << ": "<<  req.grasp[i].hand_joint_config[j] << std::endl;
-
-        joint(j) = req.grasp[i].hand_joint_config[j];
-    }
-    std::cout << "joints for hand pushing back:" << joint.transpose() << std::endl;
-    hand_configs.push_back(joint);
+    grasp_index++;
   }
 
-  setJointTrajectories(trajectory, hand_configs, true);
-
-  res.success = true;
-  ROS_INFO("Grasper finished.");
-  return true;
+  ROS_ERROR_STREAM("Failed to plan for all of the given grasping poses.");
+  res.success = false;
+  return false;
 }
 
 bool goHome(std_srvs::Trigger::Request  &req,

@@ -43,3 +43,64 @@ rosservice call /grasp "grasp:
         z:  0.38272
         w:  0.10635
   hand_joint_config: [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]"
+
+
+# Pose with list of grasps
+
+rosservice call /grasp "grasp:
+- pose:
+  - target_pose:
+      header:
+        seq: 0
+        stamp:
+          secs: 0
+          nsecs: 0
+        frame_id: 'world'
+      pose:
+        position:
+          x: 0.23528
+          y: 0.42511
+          z: -0.32333
+        orientation:
+          x: -0.34069
+          y:  0.85214
+          z:  0.38272
+          w:  0.10635
+    hand_joint_config: [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  - target_pose:
+      header:
+        seq: 0
+        stamp:
+          secs: 0
+          nsecs: 0
+        frame_id: 'world'
+      pose:
+        position:
+          x: 1.23528
+          y: 0.42511
+          z: -0.32333
+        orientation:
+          x: -0.34069
+          y:  0.85214
+          z:  0.38272
+          w:  0.10635
+    hand_joint_config: [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+- pose:
+  - target_pose:
+      header:
+        seq: 0
+        stamp:
+          secs: 0
+          nsecs: 0
+        frame_id: 'world'
+      pose:
+        position:
+          x: 0.23528
+          y: 0.42511
+          z: 0.32333
+        orientation:
+          x: -0.34069
+          y:  0.85214
+          z:  0.38272
+          w:  0.10635
+    hand_joint_config: [0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]"

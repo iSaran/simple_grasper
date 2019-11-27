@@ -1,3 +1,4 @@
-rosba_msgs/GraspPose[] grasp
+# A list of grasps
+rosba_msgs/GraspPoses[] grasp
 ---
 bool success
