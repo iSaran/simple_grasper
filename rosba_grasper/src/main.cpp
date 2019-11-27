@@ -50,6 +50,8 @@ const std::string NODE_NAME = "rosba_grasper";
 // Parameters
 double DURATION = 3.5;
 double PLANNING_TIME = 5.0;
+int N_PLANNING_ATTEMPTS = 100;
+double MOVEIT_GOAL_TOLERANCE = 0.01;
 bool REAL_ARM = false;
 bool REAL_HAND = false;
 std::string group_name = "lwr_ati_xtion_bhand";
@@ -65,6 +67,8 @@ void config()
   n.getParam("config/real_hw/hand", REAL_HAND);
   n.getParam("config/moveit/group_name", group_name);
   n.getParam("config/moveit/planning_time", PLANNING_TIME);
+  n.getParam("config/moveit/n_planning_attempts", N_PLANNING_ATTEMPTS);
+  n.getParam("config/moveit/goal_tolerance", MOVEIT_GOAL_TOLERANCE);
   n.getParam("config/moveit/duration", DURATION);
 
   n.getParam("config/rviz/frame", RVIZ_FRAME);
@@ -93,6 +97,8 @@ void config()
                    << "REAL_ARM: " << REAL_ARM << std::endl
                    << "REAL_HAND: " << REAL_HAND << std::endl
                    << "PLANNING_TIME: " << PLANNING_TIME << std::endl
+                   << "N_PLANNING_ATTEMPTS: " << N_PLANNING_ATTEMPTS << std::endl
+                   << "MOVEIT_GOAL_TOLERANCE: " << MOVEIT_GOAL_TOLERANCE << std::endl
                    << "DURATION: " << DURATION << std::endl
                    << "RVIZ_FRAME: " << RVIZ_FRAME << std::endl
                    << "RVIZ_TOPIC: " << RVIZ_TOPIC << std::endl
@@ -284,8 +290,8 @@ bool callback(rosba_msgs::Grasp::Request  &req,
   moveit::planning_interface::MoveGroupInterface::Plan plan;
   moveit_msgs::RobotState start_state;
   group.setPlanningTime(PLANNING_TIME);
-  group.setNumPlanningAttempts(1000);
-  group.setGoalTolerance(0.01);
+  group.setNumPlanningAttempts(N_PLANNING_ATTEMPTS);
+  group.setGoalTolerance(MOVEIT_GOAL_TOLERANCE);
 
   // Transform pose to world frame
   tf2_ros::Buffer tfBuffer;

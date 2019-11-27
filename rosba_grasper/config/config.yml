@@ -20,6 +20,8 @@ moveit:
   # group_name: "lwr_ati_xtion_bhand"
   group_name: "lwr_ati_bhand_palm"
   planning_time: 100.0
+  n_planning_attempts: 100
+  goal_tolerance: 0.01
   duration: 10.0
 
 rviz:
