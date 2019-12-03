@@ -203,14 +203,16 @@ bool setJointTrajectories(const std::vector<arl::primitive::JointTrajectory*>& a
     {
       arm_viz_robot->setMode(arl::robot::Mode::POSITION_CONTROL);
       arl::controller::JointTrajectory trajectory_controller(arm_viz_robot);
+      arm.at(i)->scale(1/DURATION);
       trajectory_controller.reference(*arm.at(i));
       trajectory_controller.run();
+      arm.at(i)->scale(DURATION);
 
       hand_viz_robot->setMode(arl::robot::Mode::VELOCITY_CONTROL);
       arl::controller::JointTrajectory hand_joint_controller_(hand_viz_robot);
       std::cout << "Setting reference to hand: " << hand_joints.at(i).transpose() << std::endl;
       std::cout << "Setting reference to hand arma: " << hand_joints.at(i).toArma() << std::endl;
-      hand_joint_controller_.reference(hand_joints.at(i).toArma(), 7);
+      hand_joint_controller_.reference(hand_joints.at(i).toArma(), 1);
       hand_joint_controller_.run();
       hand_viz_robot->setMode(arl::robot::Mode::STOPPED);
     }
